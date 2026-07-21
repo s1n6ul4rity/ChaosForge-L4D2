@@ -9,6 +9,7 @@
 
 #include "chaosforge/spawn_manager.inc"
 #include "chaosforge/commands.inc"
+#include "chaosforge/dispatcher.inc"
 #include "chaosforge/protocol.inc"
 #include "chaosforge/websocket_client.inc"
 

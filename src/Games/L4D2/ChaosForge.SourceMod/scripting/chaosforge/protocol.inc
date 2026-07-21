@@ -129,7 +129,13 @@ void ChaosProtocol_HandleJsonEvent(
         hasViewerName ? viewerName : "(not provided)"
     );
 
-    socket.WriteString("OK EVENT_PARSED");
+    ChaosDispatcher_Dispatch(
+    socket,
+    eventType,
+    infected,
+    count,
+    hasInfected
+);
 
-    delete json;
+delete json;
 }
