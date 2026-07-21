@@ -12,6 +12,8 @@ public sealed record ChaosEvent
 
     public string? GiftName { get; init; }
 
+    public SpecialInfectedType? Infected { get; init; }
+
     public DateTimeOffset CreatedAt { get; init; } =
         DateTimeOffset.UtcNow;
 }
