@@ -1,9 +1,11 @@
+using ChaosForge.Shared.Contracts;
+using System.Net.WebSockets;
+using Microsoft.AspNetCore.Http;
 using ChaosForge.Bridge.Configuration;
 using ChaosForge.Bridge.Endpoints;
-using ChaosForge.Core;
-using System.Net.WebSockets;
-using System.Text;
 using ChaosForge.Bridge.Infrastructure.WebSockets;
+using ChaosForge.Core;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -34,7 +36,7 @@ var app = builder.Build();
 
 app.UseWebSockets();
 
-app.Map("/chaosforge", async context =>
+app.Map("/chaosforge", async (HttpContext context) =>
 {
     if (!context.WebSockets.IsWebSocketRequest)
     {
@@ -130,22 +132,32 @@ app.MapPost(
                 statusCode: StatusCodes.Status503ServiceUnavailable);
         }
 
+        var chaosEvent = new ChaosEvent
+        {
+            Id = Guid.NewGuid(),
+            Type = ChaosEventType.SpawnSpecialInfected,
+            ViewerName = "OpenAI",
+            GiftName = null,
+            Count = 1,
+            Infected = SpecialInfectedType.Hunter
+        };
+
         await connection.SendAsync(
-            "SPAWN_HUNTER",
+            chaosEvent,
             cancellationToken);
 
         Console.WriteLine(
             "[Bridge] HTTP request sent SPAWN_HUNTER");
 
-        return Results.Accepted(
-            value: new
-            {
-                eventType = "SpawnHunter",
-                status = "Dispatched"
-            });
+    return Results.Accepted(
+    value: new
+    {
+        eventType = ChaosEventType.SpawnSpecialInfected,
+        infected = SpecialInfectedType.Hunter,
+        status = "Dispatched"
     });
-
-app.MapGet(
+});
+    app.MapGet(
     "/api/v1/game/status",
     (ChaosForgeWebSocketConnection connection) =>
         Results.Ok(new
