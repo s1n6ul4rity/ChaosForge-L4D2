@@ -1,0 +1,70 @@
+﻿using System.Net.WebSockets;
+using System.Text;
+
+namespace ChaosForge.Bridge.Infrastructure.WebSockets;
+
+public sealed class ChaosForgeWebSocketConnection : IAsyncDisposable
+{
+    private readonly SemaphoreSlim _sendLock = new(1, 1);
+    private WebSocket? _socket;
+
+    public bool IsConnected =>
+        _socket is { State: WebSocketState.Open };
+
+    public void Attach(WebSocket socket)
+    {
+        ArgumentNullException.ThrowIfNull(socket);
+
+        _socket = socket;
+    }
+
+    public void Detach(WebSocket socket)
+    {
+        if (ReferenceEquals(_socket, socket))
+        {
+            _socket = null;
+        }
+    }
+
+    public async Task SendAsync(
+        string message,
+        CancellationToken cancellationToken = default)
+    {
+        if (_socket is not { State: WebSocketState.Open } socket)
+        {
+            throw new InvalidOperationException(
+                "The ChaosForge SourceMod plugin is not connected.");
+        }
+
+        byte[] payload = Encoding.UTF8.GetBytes(message);
+
+        await _sendLock.WaitAsync(cancellationToken);
+
+        try
+        {
+            await socket.SendAsync(
+                payload,
+                WebSocketMessageType.Text,
+                endOfMessage: true,
+                cancellationToken);
+        }
+        finally
+        {
+            _sendLock.Release();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_socket is { State: WebSocketState.Open } socket)
+        {
+            await socket.CloseAsync(
+                WebSocketCloseStatus.NormalClosure,
+                "ChaosForge Bridge shutting down.",
+                CancellationToken.None);
+        }
+
+        _socket?.Dispose();
+        _sendLock.Dispose();
+    }
+}
