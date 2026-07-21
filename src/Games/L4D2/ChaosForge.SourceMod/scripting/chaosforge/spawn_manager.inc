@@ -40,13 +40,20 @@ bool ChaosSpawn_IsLivingSurvivor(int client)
         && GetClientTeam(client) == CHAOSFORGE_TEAM_SURVIVOR;
 }
 
-bool ChaosSpawn_Hunter(int preferredClient = 0)
+bool ChaosSpawn_SpecialInfected(
+    const char[] infectedName,
+    int preferredClient = 0
+)
 {
-    int spawningClient = ChaosSpawn_GetAvailableSurvivor(preferredClient);
+    int spawningClient =
+        ChaosSpawn_GetAvailableSurvivor(preferredClient);
 
     if (spawningClient == 0)
     {
-        PrintToServer("[ChaosForge] No living Survivor is available.");
+        PrintToServer(
+            "[ChaosForge] No living Survivor is available."
+        );
+
         return false;
     }
 
@@ -54,7 +61,10 @@ bool ChaosSpawn_Hunter(int preferredClient = 0)
 
     if (originalFlags == INVALID_FCVAR_FLAGS)
     {
-        PrintToServer("[ChaosForge] Could not find z_spawn_old.");
+        PrintToServer(
+            "[ChaosForge] Could not find z_spawn_old."
+        );
+
         return false;
     }
 
@@ -65,7 +75,8 @@ bool ChaosSpawn_Hunter(int preferredClient = 0)
 
     FakeClientCommand(
         spawningClient,
-        "z_spawn_old hunter auto"
+        "z_spawn_old %s auto",
+        infectedName
     );
 
     SetCommandFlags(
@@ -74,9 +85,74 @@ bool ChaosSpawn_Hunter(int preferredClient = 0)
     );
 
     PrintToServer(
-        "[ChaosForge] Hunter spawn requested using Survivor %N.",
+        "[ChaosForge] %s spawn requested using Survivor %N.",
+        infectedName,
         spawningClient
     );
 
     return true;
+}
+
+bool ChaosSpawn_Hunter(int preferredClient = 0)
+{
+    return ChaosSpawn_SpecialInfected(
+        "hunter",
+        preferredClient
+    );
+}
+
+bool ChaosSpawn_Smoker(int preferredClient = 0)
+{
+    return ChaosSpawn_SpecialInfected(
+        "smoker",
+        preferredClient
+    );
+}
+
+bool ChaosSpawn_Boomer(int preferredClient = 0)
+{
+    return ChaosSpawn_SpecialInfected(
+        "boomer",
+        preferredClient
+    );
+}
+
+bool ChaosSpawn_Charger(int preferredClient = 0)
+{
+    return ChaosSpawn_SpecialInfected(
+        "charger",
+        preferredClient
+    );
+}
+
+bool ChaosSpawn_Jockey(int preferredClient = 0)
+{
+    return ChaosSpawn_SpecialInfected(
+        "jockey",
+        preferredClient
+    );
+}
+
+bool ChaosSpawn_Spitter(int preferredClient = 0)
+{
+    return ChaosSpawn_SpecialInfected(
+        "spitter",
+        preferredClient
+    );
+}
+
+bool ChaosSpawn_Tank(int preferredClient = 0)
+{
+    return ChaosSpawn_SpecialInfected(
+        "tank",
+        preferredClient
+    );
+}
+
+bool ChaosSpawn_Witch(int preferredClient = 0)
+{
+    return ChaosSpawn_SpecialInfected(
+        "witch",
+        preferredClient
+    );
 }

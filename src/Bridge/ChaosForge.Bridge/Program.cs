@@ -1,3 +1,4 @@
+using ChaosForge.Bridge.Models;
 using ChaosForge.Shared.Contracts;
 using System.Net.WebSockets;
 using Microsoft.AspNetCore.Http;
@@ -116,6 +117,71 @@ app.Map("/chaosforge", async (HttpContext context) =>
         Console.WriteLine("[Bridge] SourceMod disconnected.");
     }
 });
+
+app.MapPost(
+    "/api/v1/events/spawn-infected",
+    async (
+        SpawnInfectedRequest request,
+        ChaosForgeWebSocketConnection connection,
+        CancellationToken cancellationToken) =>
+    {
+        if (!connection.IsConnected)
+        {
+            return Results.Problem(
+                title: "SourceMod is not connected",
+                detail:
+                    "Start Left 4 Dead 2 and ensure the ChaosForge plugin is running.",
+                statusCode:
+                    StatusCodes.Status503ServiceUnavailable);
+        }
+
+        if (!Enum.TryParse<SpecialInfectedType>(
+                request.Infected,
+                ignoreCase: true,
+                out var infected)
+            || infected == SpecialInfectedType.Unknown)
+        {
+            return Results.BadRequest(
+                new
+                {
+                    error = "Unsupported infected type.",
+                    supported = Enum.GetNames<SpecialInfectedType>()
+                        .Where(name => name != nameof(
+                            SpecialInfectedType.Unknown))
+                });
+        }
+
+        int count = Math.Clamp(request.Count, 1, 10);
+
+        var chaosEvent = new ChaosEvent
+        {
+            Id = Guid.NewGuid(),
+            Type = ChaosEventType.SpawnSpecialInfected,
+            ViewerName = request.ViewerName,
+            GiftName = request.GiftName,
+            Count = count,
+            Infected = infected
+        };
+
+        await connection.SendAsync(
+            chaosEvent,
+            cancellationToken);
+
+        Console.WriteLine(
+            $"[Bridge] HTTP request sent " +
+            $"SpawnSpecialInfected/{infected} x{count}");
+
+        return Results.Accepted(
+            value: new
+            {
+                eventType =
+                    ChaosEventType.SpawnSpecialInfected.ToString(),
+                infected = infected.ToString(),
+                count,
+                viewerName = request.ViewerName,
+                status = "Dispatched"
+            });
+    });
 
 app.MapPost(
     "/api/v1/events/spawn-hunter",
