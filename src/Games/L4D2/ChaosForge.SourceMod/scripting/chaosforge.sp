@@ -3,6 +3,7 @@
 
 #include <sourcemod>
 #include <websocket>
+#include <websocket/yyjson.inc>
 
 #define CHAOSFORGE_VERSION "0.3.0"
 
