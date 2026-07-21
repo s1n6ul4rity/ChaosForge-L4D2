@@ -81,6 +81,8 @@ public sealed class ChaosForgeWebSocketConnection : IAsyncDisposable
             chaosEvent,
             SerializerOptions);
 
+        Console.WriteLine($"[Bridge] Sending JSON: {json}");
+
         byte[] payload = Encoding.UTF8.GetBytes(json);
 
         await _sendLock.WaitAsync(cancellationToken);
