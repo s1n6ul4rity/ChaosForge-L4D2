@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Packages.props.xml" />
+  </Folder>
+  <Project Path="../src/Bridge/ChaosForge.Bridge/ChaosForge.Bridge.csproj" />
+  <Project Path="../src/Core/ChaosForge.Core/ChaosForge.Core.csproj" />
+  <Project Path="../src/Shared/ChaosForge.Shared/ChaosForge.Shared.csproj" />
+</Solution>
