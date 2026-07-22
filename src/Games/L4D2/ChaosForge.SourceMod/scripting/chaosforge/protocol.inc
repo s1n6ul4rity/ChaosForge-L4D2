@@ -3,54 +3,35 @@
 #endif
 #define _chaosforge_protocol_included
 
-#define CHAOSFORGE_PROTOCOL_MESSAGE_SIZE 512
-#define CHAOSFORGE_EVENT_TYPE_SIZE 64
-#define CHAOSFORGE_INFECTED_SIZE 32
-#define CHAOSFORGE_VIEWER_NAME_SIZE 128
-
 void ChaosProtocol_HandleMessage(
     WebSocket socket,
-    const char[] incomingMessage
+    const char[] message
 )
 {
-    char message[CHAOSFORGE_PROTOCOL_MESSAGE_SIZE];
-
-    strcopy(
-        message,
-        sizeof(message),
-        incomingMessage
-    );
-
-    TrimString(message);
-
-    PrintToServer(
-        "[ChaosForge] Bridge message received: %s",
-        message
-    );
-
-    // Keep the existing connection-control protocol.
     if (StrEqual(message, "PING", false))
     {
+        PrintToServer(
+            "[ChaosForge] Received PING from Bridge."
+        );
+
         socket.WriteString("PONG");
         return;
     }
 
-    // Keep the old command temporarily for compatibility.
-    if (StrEqual(message, "SPAWN_HUNTER", false))
+    if (message[0] == '{')
     {
-        if (ChaosSpawn_Hunter())
-        {
-            socket.WriteString("OK SPAWN_HUNTER");
-        }
-        else
-        {
-            socket.WriteString("ERROR SPAWN_HUNTER");
-        }
+        ChaosProtocol_HandleJsonEvent(
+            socket,
+            message
+        );
 
         return;
     }
 
-    ChaosProtocol_HandleJsonEvent(socket, message);
+    PrintToServer(
+        "[ChaosForge] Unknown Bridge message: %s",
+        message
+    );
 }
 
 void ChaosProtocol_HandleJsonEvent(
@@ -70,43 +51,127 @@ void ChaosProtocol_HandleJsonEvent(
         return;
     }
 
-    char eventType[CHAOSFORGE_EVENT_TYPE_SIZE];
-    char infected[CHAOSFORGE_INFECTED_SIZE];
-    char viewerName[CHAOSFORGE_VIEWER_NAME_SIZE];
+    char eventId[64];
+    char eventType[64];
+    char messageType[32];
+    char infected[32];
+    char viewerName[128];
+
+    eventId[0] = '\0';
+    eventType[0] = '\0';
+    messageType[0] = '\0';
+    infected[0] = '\0';
+    viewerName[0] = '\0';
+
+    int protocolVersion =
+        json.PtrGetInt("/protocolVersion");
+
+    bool hasMessageType = json.PtrGetString(
+        "/messageType",
+        messageType,
+        sizeof(messageType)
+    );
+
+    bool hasEventId = json.PtrGetString(
+        "/eventId",
+        eventId,
+        sizeof(eventId)
+    );
 
     bool hasEventType = json.PtrGetString(
-        "/type",
+        "/eventType",
         eventType,
         sizeof(eventType)
     );
 
-    bool hasInfected = json.PtrGetString(
-        "/infected",
-        infected,
-        sizeof(infected)
-    );
-
-    bool hasViewerName = json.PtrGetString(
-        "/viewerName",
-        viewerName,
-        sizeof(viewerName)
-    );
-
-    int count = json.PtrGetInt("/count");
-
-    if (!hasEventType)
+    if (protocolVersion != 1)
     {
         LogError(
-            "[ChaosForge] JSON event is missing the required 'type' property."
+            "[ChaosForge] Unsupported protocol version: %d",
+            protocolVersion
         );
 
-        socket.WriteString("ERROR MISSING_EVENT_TYPE");
         delete json;
         return;
     }
 
+    if (!hasMessageType
+        || !StrEqual(
+            messageType,
+            "ChaosEvent",
+            false
+        ))
+    {
+        LogError(
+            "[ChaosForge] Unsupported message type."
+        );
+
+        delete json;
+        return;
+    }
+
+    if (!hasEventId)
+    {
+        LogError(
+            "[ChaosForge] JSON event is missing 'eventId'."
+        );
+
+        delete json;
+        return;
+    }
+
+    if (!hasEventType)
+    {
+        ChaosDispatcher_SendAcknowledgement(
+            socket,
+            eventId,
+            false,
+            1,
+            0,
+            "Missing event type."
+        );
+
+        delete json;
+        return;
+    }
+
+    bool hasViewerName = json.PtrGetString(
+        "/context/viewerName",
+        viewerName,
+        sizeof(viewerName)
+    );
+
+    int count =
+        json.PtrGetInt("/payload/count");
+
+    if (count < 1)
+    {
+        count = 1;
+    }
+
+    bool hasInfected = false;
+
+    if (StrEqual(
+        eventType,
+        "SpawnSpecialInfected",
+        false
+    ))
+    {
+        hasInfected = json.PtrGetString(
+            "/payload/infected",
+            infected,
+            sizeof(infected)
+        );
+    }
+
     PrintToServer(
-        "[ChaosForge] Parsed event:"
+        "[ChaosForge] Parsed protocol v%d event:",
+        protocolVersion
+    );
+
+    PrintToServer(
+        "[ChaosForge]   ID: %s",
+        eventId
     );
 
     PrintToServer(
@@ -114,28 +179,47 @@ void ChaosProtocol_HandleJsonEvent(
         eventType
     );
 
-    PrintToServer(
-        "[ChaosForge]   Infected: %s",
-        hasInfected ? infected : "(not provided)"
-    );
+    if (hasInfected)
+    {
+        PrintToServer(
+            "[ChaosForge]   Infected: %s",
+            infected
+        );
+    }
+    else
+    {
+        PrintToServer(
+            "[ChaosForge]   Infected: (not required)"
+        );
+    }
 
     PrintToServer(
         "[ChaosForge]   Count: %d",
         count
     );
 
-    PrintToServer(
-        "[ChaosForge]   Viewer: %s",
-        hasViewerName ? viewerName : "(not provided)"
-    );
+    if (hasViewerName)
+    {
+        PrintToServer(
+            "[ChaosForge]   Viewer: %s",
+            viewerName
+        );
+    }
+    else
+    {
+        PrintToServer(
+            "[ChaosForge]   Viewer: (not provided)"
+        );
+    }
 
     ChaosDispatcher_Dispatch(
-    socket,
-    eventType,
-    infected,
-    count,
-    hasInfected
-);
+        socket,
+        eventId,
+        eventType,
+        infected,
+        count,
+        hasInfected
+    );
 
-delete json;
+    delete json;
 }

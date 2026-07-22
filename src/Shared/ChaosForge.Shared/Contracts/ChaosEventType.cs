@@ -8,5 +8,6 @@ public enum ChaosEventType
     GiveMedkit,
     GivePills,
     GiveAmmo,
-    SpawnSpecialInfected
+    SpawnSpecialInfected,
+    SpawnCommonInfected
 }

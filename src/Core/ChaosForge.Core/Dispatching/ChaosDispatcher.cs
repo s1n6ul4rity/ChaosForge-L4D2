@@ -5,38 +5,35 @@ namespace ChaosForge.Core.Dispatching;
 
 public sealed class ChaosDispatcher : IChaosDispatcher
 {
-    private readonly IReadOnlyDictionary<
-        ChaosEventType,
-        IChaosEventHandler> _handlers;
+    private readonly IReadOnlyCollection<IChaosEventHandler> _handlers;
 
     public ChaosDispatcher(
         IEnumerable<IChaosEventHandler> handlers)
     {
         ArgumentNullException.ThrowIfNull(handlers);
 
-        _handlers = handlers.ToDictionary(
-            handler => handler.EventType,
-            handler => handler);
+        _handlers = handlers.ToArray();
     }
 
-    public Task<ChaosExecutionResult> DispatchAsync(
+    public async Task<ChaosExecutionResult> DispatchAsync(
         ChaosEvent chaosEvent,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(chaosEvent);
 
-        if (!_handlers.TryGetValue(
-                chaosEvent.Type,
-                out var handler))
+        IChaosEventHandler? handler =
+            _handlers.FirstOrDefault(
+                candidate =>
+                    candidate.EventType == chaosEvent.Type);
+
+        if (handler is null)
         {
-            return Task.FromResult(
-                ChaosExecutionResult.Failed(
-                    chaosEvent,
-                    $"No handler is registered for event type " +
-                    $"'{chaosEvent.Type}'."));
+            return ChaosExecutionResult.Failed(
+                chaosEvent,
+                $"No handler is registered for event type '{chaosEvent.Type}'.");
         }
 
-        return handler.ExecuteAsync(
+        return await handler.ExecuteAsync(
             chaosEvent,
             cancellationToken);
     }

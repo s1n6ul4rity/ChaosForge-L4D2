@@ -1,6 +1,6 @@
-﻿using ChaosForge.Bridge.Models;
-using ChaosForge.Core.Dispatching;
+﻿using ChaosForge.Core.Interactions;
 using ChaosForge.Shared.Contracts;
+using ChaosForge.Shared.Interactions;
 
 namespace ChaosForge.Bridge.Endpoints;
 
@@ -9,71 +9,91 @@ public static class EventEndpoints
     public static IEndpointRouteBuilder MapEventEndpoints(
         this IEndpointRouteBuilder endpoints)
     {
-        var group = endpoints.MapGroup("/api/v1/events")
-            .WithTags("Events");
+        ArgumentNullException.ThrowIfNull(endpoints);
 
-        group.MapPost("/test", HandleTestEventAsync);
+        endpoints.MapPost(
+            "/api/v1/events",
+            ProcessInteractionAsync);
 
         return endpoints;
     }
 
-    private static async Task<IResult> HandleTestEventAsync(
-        TestEventRequest request,
-        IChaosDispatcher dispatcher,
-        ILoggerFactory loggerFactory,
+    private static async Task<IResult> ProcessInteractionAsync(
+        ChaosEventRequest request,
+        IInteractionPipeline pipeline,
         CancellationToken cancellationToken)
     {
-        var logger = loggerFactory.CreateLogger(
-            "ChaosForge.Bridge.EventEndpoints");
-
-        if (string.IsNullOrWhiteSpace(request.ViewerName))
+        if (string.IsNullOrWhiteSpace(request.Type))
         {
             return Results.BadRequest(new
             {
-                error = "viewerName is required."
+                error = "Event type is required."
             });
         }
 
-        if (request.Count < 1)
+        Guid interactionId = Guid.NewGuid();
+
+        var parameters =
+            new Dictionary<string, string>(
+                StringComparer.OrdinalIgnoreCase);
+
+        if (!string.IsNullOrWhiteSpace(request.Infected))
         {
-            return Results.BadRequest(new
-            {
-                error = "count must be at least 1."
-            });
+            parameters["infected"] =
+                request.Infected.Trim();
         }
 
-        var chaosEvent = new ChaosEvent
+        if (!string.IsNullOrWhiteSpace(request.GiftName))
         {
-            Id = request.RequestId ?? Guid.NewGuid(),
-            Type = ChaosEventType.TestEvent,
-            ViewerName = request.ViewerName.Trim(),
-            GiftName = string.IsNullOrWhiteSpace(request.GiftName)
-                ? null
-                : request.GiftName.Trim(),
-            Count = request.Count
+            parameters["giftName"] =
+                request.GiftName.Trim();
+        }
+
+        var interaction = new ViewerInteraction
+        {
+            Id = interactionId,
+            ExternalId = interactionId.ToString(),
+            Source = "Development",
+            Type = InteractionType.Command,
+            TriggerName = request.Type.Trim(),
+
+            ViewerName = string.IsNullOrWhiteSpace(
+                request.ViewerName)
+                    ? "Anonymous"
+                    : request.ViewerName.Trim(),
+
+            Quantity = Math.Clamp(
+                request.Count,
+                1,
+                100),
+
+            Parameters = parameters
         };
 
-        logger.LogInformation(
-            "Received chaos event {EventId}. Type: {EventType}; Viewer: {ViewerName}; Gift: {GiftName}; Count: {Count}",
-            chaosEvent.Id,
-            chaosEvent.Type,
-            chaosEvent.ViewerName,
-            chaosEvent.GiftName,
-            chaosEvent.Count);
+        ChaosExecutionResult result =
+            await pipeline.ExecuteAsync(
+                interaction,
+                cancellationToken);
 
-        var result = await dispatcher.DispatchAsync(
-            chaosEvent,
-            cancellationToken);
+        if (!result.Success)
+        {
+            return Results.BadRequest(result);
+        }
 
-        logger.LogInformation(
-            "Completed chaos event {EventId}. Success: {Success}; Executed: {ExecutedCount}/{RequestedCount}",
-            result.EventId,
-            result.Success,
-            result.ExecutedCount,
-            result.RequestedCount);
-
-        return result.Success
-            ? Results.Ok(result)
-            : Results.BadRequest(result);
+        return Results.Accepted(
+            value: result);
     }
+}
+
+public sealed record ChaosEventRequest
+{
+    public required string Type { get; init; }
+
+    public string? ViewerName { get; init; }
+
+    public string? GiftName { get; init; }
+
+    public int Count { get; init; } = 1;
+
+    public string? Infected { get; init; }
 }

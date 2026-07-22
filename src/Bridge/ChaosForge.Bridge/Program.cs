@@ -1,11 +1,11 @@
-using ChaosForge.Bridge.Models;
-using ChaosForge.Shared.Contracts;
-using System.Net.WebSockets;
-using Microsoft.AspNetCore.Http;
 using ChaosForge.Bridge.Configuration;
 using ChaosForge.Bridge.Endpoints;
 using ChaosForge.Bridge.Infrastructure.WebSockets;
 using ChaosForge.Core;
+using ChaosForge.Core.Transport;
+using ChaosForge.Core.Interactions;
+using ChaosForge.Shared.Interactions;
+using System.Net.WebSockets;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -20,6 +20,16 @@ builder.Services
         "Bridge port must be between 1 and 65535.")
     .ValidateOnStart();
 
+List<InteractionMappingDefinition> mappings =
+    builder.Configuration
+        .GetSection("ChaosForge:Mappings")
+        .Get<List<InteractionMappingDefinition>>()
+    ?? [];
+
+builder.Services.AddSingleton<
+    IInteractionMappingCatalog>(
+        new InteractionMappingCatalog(mappings));
+
 builder.Services.AddChaosForgeCore();
 
 var bridgeSettings = builder.Configuration
@@ -33,6 +43,10 @@ builder.WebHost.UseUrls(
 
 builder.Services.AddSingleton<ChaosForgeWebSocketConnection>();
 
+builder.Services.AddSingleton<
+    IChaosEventTransport,
+    WebSocketChaosEventTransport>();
+
 var app = builder.Build();
 
 app.UseWebSockets();
@@ -41,16 +55,17 @@ app.Map("/chaosforge", async (HttpContext context) =>
 {
     if (!context.WebSockets.IsWebSocketRequest)
     {
-        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+        context.Response.StatusCode =
+            StatusCodes.Status400BadRequest;
+
         await context.Response.WriteAsync(
             "A WebSocket connection is required.");
 
         return;
     }
 
-    var connection =
-        context.RequestServices
-            .GetRequiredService<ChaosForgeWebSocketConnection>();
+    var connection = context.RequestServices
+        .GetRequiredService<ChaosForgeWebSocketConnection>();
 
     using WebSocket socket =
         await context.WebSockets.AcceptWebSocketAsync();
@@ -70,7 +85,8 @@ app.Map("/chaosforge", async (HttpContext context) =>
                     buffer,
                     context.RequestAborted);
 
-            if (result.MessageType == WebSocketMessageType.Close)
+            if (result.MessageType ==
+                WebSocketMessageType.Close)
             {
                 break;
             }
@@ -81,6 +97,11 @@ app.Map("/chaosforge", async (HttpContext context) =>
                 result.Count);
 
             Console.WriteLine($"[Plugin] {message}");
+
+            if (connection.TryHandleAcknowledgement(message))
+            {
+                continue;
+            }
 
             if (message.Equals(
                 "HELLO CHAOSFORGE_L4D2",
@@ -104,7 +125,7 @@ app.Map("/chaosforge", async (HttpContext context) =>
     }
     catch (OperationCanceledException)
     {
-        // Connection ended because the request or application stopped.
+        // Request or application stopped.
     }
     catch (WebSocketException exception)
     {
@@ -114,121 +135,20 @@ app.Map("/chaosforge", async (HttpContext context) =>
     finally
     {
         connection.Detach(socket);
-        Console.WriteLine("[Bridge] SourceMod disconnected.");
+
+        Console.WriteLine(
+            "[Bridge] SourceMod disconnected.");
     }
 });
 
-app.MapPost(
-    "/api/v1/events/spawn-infected",
-    async (
-        SpawnInfectedRequest request,
-        ChaosForgeWebSocketConnection connection,
-        CancellationToken cancellationToken) =>
-    {
-        if (!connection.IsConnected)
-        {
-            return Results.Problem(
-                title: "SourceMod is not connected",
-                detail:
-                    "Start Left 4 Dead 2 and ensure the ChaosForge plugin is running.",
-                statusCode:
-                    StatusCodes.Status503ServiceUnavailable);
-        }
-
-        if (!Enum.TryParse<SpecialInfectedType>(
-                request.Infected,
-                ignoreCase: true,
-                out var infected)
-            || infected == SpecialInfectedType.Unknown)
-        {
-            return Results.BadRequest(
-                new
-                {
-                    error = "Unsupported infected type.",
-                    supported = Enum.GetNames<SpecialInfectedType>()
-                        .Where(name => name != nameof(
-                            SpecialInfectedType.Unknown))
-                });
-        }
-
-        int count = Math.Clamp(request.Count, 1, 10);
-
-        var chaosEvent = new ChaosEvent
-        {
-            Id = Guid.NewGuid(),
-            Type = ChaosEventType.SpawnSpecialInfected,
-            ViewerName = request.ViewerName,
-            GiftName = request.GiftName,
-            Count = count,
-            Infected = infected
-        };
-
-        await connection.SendAsync(
-            chaosEvent,
-            cancellationToken);
-
-        Console.WriteLine(
-            $"[Bridge] HTTP request sent " +
-            $"SpawnSpecialInfected/{infected} x{count}");
-
-        return Results.Accepted(
-            value: new
-            {
-                eventType =
-                    ChaosEventType.SpawnSpecialInfected.ToString(),
-                infected = infected.ToString(),
-                count,
-                viewerName = request.ViewerName,
-                status = "Dispatched"
-            });
-    });
-
-app.MapPost(
-    "/api/v1/events/spawn-hunter",
-    async (
-        ChaosForgeWebSocketConnection connection,
-        CancellationToken cancellationToken) =>
-    {
-        if (!connection.IsConnected)
-        {
-            return Results.Problem(
-                title: "SourceMod is not connected",
-                detail:
-                    "Start Left 4 Dead 2 and ensure the ChaosForge plugin is loaded.",
-                statusCode: StatusCodes.Status503ServiceUnavailable);
-        }
-
-        var chaosEvent = new ChaosEvent
-        {
-            Id = Guid.NewGuid(),
-            Type = ChaosEventType.SpawnSpecialInfected,
-            ViewerName = "OpenAI",
-            GiftName = null,
-            Count = 1,
-            Infected = SpecialInfectedType.Hunter
-        };
-
-        await connection.SendAsync(
-            chaosEvent,
-            cancellationToken);
-
-        Console.WriteLine(
-            "[Bridge] HTTP request sent SPAWN_HUNTER");
-
-    return Results.Accepted(
-    value: new
-    {
-        eventType = ChaosEventType.SpawnSpecialInfected,
-        infected = SpecialInfectedType.Hunter,
-        status = "Dispatched"
-    });
-});
-    app.MapGet(
+app.MapGet(
     "/api/v1/game/status",
     (ChaosForgeWebSocketConnection connection) =>
         Results.Ok(new
         {
             connected = connection.IsConnected
         }));
+
+app.MapEventEndpoints();
 
 app.Run();

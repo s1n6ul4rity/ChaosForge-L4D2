@@ -156,3 +156,63 @@ bool ChaosSpawn_Witch(int preferredClient = 0)
         preferredClient
     );
 }
+
+bool ChaosSpawn_Common(
+    int count,
+    int preferredClient = 0
+)
+{
+    int spawningClient =
+        ChaosSpawn_GetAvailableSurvivor(preferredClient);
+
+    if (spawningClient == 0)
+    {
+        PrintToServer(
+            "[ChaosForge] No living Survivor is available."
+        );
+
+        return false;
+    }
+
+    if (count < 1)
+    {
+        count = 1;
+    }
+
+    int originalFlags = GetCommandFlags("z_spawn_old");
+
+    if (originalFlags == INVALID_FCVAR_FLAGS)
+    {
+        PrintToServer(
+            "[ChaosForge] Could not find z_spawn_old."
+        );
+
+        return false;
+    }
+
+    SetCommandFlags(
+        "z_spawn_old",
+        originalFlags & ~FCVAR_CHEAT
+    );
+
+    for (int i = 0; i < count; i++)
+    {
+        FakeClientCommand(
+            spawningClient,
+            "z_spawn_old infected auto"
+        );
+    }
+
+    SetCommandFlags(
+        "z_spawn_old",
+        originalFlags
+    );
+
+    PrintToServer(
+        "[ChaosForge] Requested %d common infected using Survivor %N.",
+        count,
+        spawningClient
+    );
+
+    return true;
+}
