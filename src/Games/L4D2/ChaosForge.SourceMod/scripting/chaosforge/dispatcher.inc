@@ -5,6 +5,13 @@
 
 #define CHAOSFORGE_ACK_MESSAGE_SIZE 512
 
+forward bool ChaosSpawnQueue_Enqueue(
+    WebSocket socket,
+    const char[] eventId,
+    const char[] infected,
+    int requestedCount
+);
+
 bool ChaosDispatcher_Dispatch(
     WebSocket socket,
     const char[] eventId,
@@ -19,11 +26,7 @@ bool ChaosDispatcher_Dispatch(
         count = 1;
     }
 
-    if (StrEqual(
-        eventType,
-        "SpawnSpecialInfected",
-        false
-    ))
+    if (StrEqual(eventType, "SpawnSpecialInfected", false))
     {
         if (!hasInfected)
         {
@@ -39,44 +42,29 @@ bool ChaosDispatcher_Dispatch(
             return false;
         }
 
-        int executedCount = 0;
-
-        for (int i = 0; i < count; i++)
-        {
-            if (!ChaosDispatcher_SpawnInfected(infected))
-            {
-                ChaosDispatcher_SendAcknowledgement(
-                    socket,
-                    eventId,
-                    false,
-                    count,
-                    executedCount,
-                    "Failed to spawn all requested special infected."
-                );
-
-                return false;
-            }
-
-            executedCount++;
-        }
-
-        ChaosDispatcher_SendAcknowledgement(
+        if (!ChaosSpawnQueue_Enqueue(
             socket,
             eventId,
-            true,
-            count,
-            executedCount,
-            "Special infected spawned successfully."
-        );
+            infected,
+            count
+        ))
+        {
+            ChaosDispatcher_SendAcknowledgement(
+                socket,
+                eventId,
+                false,
+                count,
+                0,
+                "Failed to queue special infected request."
+            );
+
+            return false;
+        }
 
         return true;
     }
 
-    if (StrEqual(
-        eventType,
-        "SpawnCommonInfected",
-        false
-    ))
+    if (StrEqual(eventType, "SpawnCommonInfected", false))
     {
         if (!ChaosSpawn_Common(count))
         {
@@ -125,28 +113,14 @@ void ChaosDispatcher_SendAcknowledgement(
     const char[] resultMessage
 )
 {
-    char acknowledgement[
-        CHAOSFORGE_ACK_MESSAGE_SIZE
-    ];
-
+    char acknowledgement[CHAOSFORGE_ACK_MESSAGE_SIZE];
     char successValue[6];
 
-    if (success)
-    {
-        strcopy(
-            successValue,
-            sizeof(successValue),
-            "true"
-        );
-    }
-    else
-    {
-        strcopy(
-            successValue,
-            sizeof(successValue),
-            "false"
-        );
-    }
+    strcopy(
+        successValue,
+        sizeof(successValue),
+        success ? "true" : "false"
+    );
 
     Format(
         acknowledgement,
@@ -167,54 +141,16 @@ void ChaosDispatcher_SendAcknowledgement(
     socket.WriteString(acknowledgement);
 }
 
+int ChaosDispatcher_SpawnInfectedEntity(
+    const char[] infected
+)
+{
+    return ChaosSpawn_SpecialInfectedEntity(infected);
+}
+
 bool ChaosDispatcher_SpawnInfected(
     const char[] infected
 )
 {
-    if (StrEqual(infected, "Hunter", false))
-    {
-        return ChaosSpawn_Hunter();
-    }
-
-    if (StrEqual(infected, "Smoker", false))
-    {
-        return ChaosSpawn_Smoker();
-    }
-
-    if (StrEqual(infected, "Boomer", false))
-    {
-        return ChaosSpawn_Boomer();
-    }
-
-    if (StrEqual(infected, "Charger", false))
-    {
-        return ChaosSpawn_Charger();
-    }
-
-    if (StrEqual(infected, "Jockey", false))
-    {
-        return ChaosSpawn_Jockey();
-    }
-
-    if (StrEqual(infected, "Spitter", false))
-    {
-        return ChaosSpawn_Spitter();
-    }
-
-    if (StrEqual(infected, "Tank", false))
-    {
-        return ChaosSpawn_Tank();
-    }
-
-    if (StrEqual(infected, "Witch", false))
-    {
-        return ChaosSpawn_Witch();
-    }
-
-    PrintToServer(
-        "[ChaosForge] Unsupported infected type: %s",
-        infected
-    );
-
-    return false;
+    return ChaosDispatcher_SpawnInfectedEntity(infected) > 0;
 }
