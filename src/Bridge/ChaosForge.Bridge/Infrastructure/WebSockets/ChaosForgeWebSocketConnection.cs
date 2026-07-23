@@ -11,7 +11,7 @@ namespace ChaosForge.Bridge.Infrastructure.WebSockets;
 public sealed class ChaosForgeWebSocketConnection : IAsyncDisposable
 {
     private static readonly TimeSpan DefaultResponseTimeout =
-        TimeSpan.FromSeconds(10);
+        TimeSpan.FromSeconds(130);
 
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {

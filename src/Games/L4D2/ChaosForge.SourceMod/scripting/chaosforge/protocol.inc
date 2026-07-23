@@ -218,7 +218,9 @@ void ChaosProtocol_HandleJsonEvent(
         eventType,
         infected,
         count,
-        hasInfected
+        hasInfected,
+        viewerName,
+        hasViewerName
     );
 
     delete json;

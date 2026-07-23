@@ -9,7 +9,8 @@ forward bool ChaosSpawnQueue_Enqueue(
     WebSocket socket,
     const char[] eventId,
     const char[] infected,
-    int requestedCount
+    int requestedCount,
+    const char[] viewerName
 );
 
 bool ChaosDispatcher_Dispatch(
@@ -18,7 +19,9 @@ bool ChaosDispatcher_Dispatch(
     const char[] eventType,
     const char[] infected,
     int count,
-    bool hasInfected
+    bool hasInfected,
+    const char[] viewerName,
+    bool hasViewerName
 )
 {
     if (count < 1)
@@ -42,11 +45,31 @@ bool ChaosDispatcher_Dispatch(
             return false;
         }
 
+        char resolvedViewerName[128];
+
+        if (hasViewerName)
+        {
+            strcopy(
+                resolvedViewerName,
+                sizeof(resolvedViewerName),
+                viewerName
+            );
+        }
+        else
+        {
+            strcopy(
+                resolvedViewerName,
+                sizeof(resolvedViewerName),
+                "Anonymous"
+            );
+        }
+
         if (!ChaosSpawnQueue_Enqueue(
             socket,
             eventId,
             infected,
-            count
+            count,
+            resolvedViewerName
         ))
         {
             ChaosDispatcher_SendAcknowledgement(

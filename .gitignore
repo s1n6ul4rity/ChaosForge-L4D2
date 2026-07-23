@@ -25,3 +25,8 @@ Releases/
 # Windows
 Thumbs.db
 Desktop.ini
+
+# Node.js
+node_modules/
+.env
+npm-debug.log*

@@ -3,7 +3,6 @@
 #endif
 #define _chaosforge_game_state_included
 
-#define CHAOSFORGE_TEAM_SURVIVOR 2
 #define CHAOSFORGE_TEAM_INFECTED 3
 
 #define CHAOSFORGE_ZOMBIECLASS_SMOKER 1

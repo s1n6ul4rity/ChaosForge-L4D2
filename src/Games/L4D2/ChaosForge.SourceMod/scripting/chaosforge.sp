@@ -12,6 +12,7 @@
 #include "chaosforge/spawn_manager.inc"
 #include "chaosforge/dispatcher.inc"
 #include "chaosforge/game_state.inc"
+#include "chaosforge/viewer_labels.inc"
 #include "chaosforge/spawn_queue.inc"
 #include "chaosforge/protocol.inc"
 #include "chaosforge/websocket_client.inc"

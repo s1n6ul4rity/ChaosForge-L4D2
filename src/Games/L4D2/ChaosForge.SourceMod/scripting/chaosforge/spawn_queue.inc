@@ -5,6 +5,7 @@
 
 #define CHAOSFORGE_SPAWN_EVENT_ID_SIZE 64
 #define CHAOSFORGE_SPAWN_INFECTED_SIZE 32
+#define CHAOSFORGE_SPAWN_VIEWER_NAME_SIZE 128
 
 #define CHAOSFORGE_SPAWN_INTERVAL 0.20
 #define CHAOSFORGE_SPAWN_RETRY_DELAY 1.00
@@ -29,6 +30,7 @@ enum struct ChaosSpawnJob
 
     char EventId[CHAOSFORGE_SPAWN_EVENT_ID_SIZE];
     char Infected[CHAOSFORGE_SPAWN_INFECTED_SIZE];
+    char ViewerName[CHAOSFORGE_SPAWN_VIEWER_NAME_SIZE];
 
     int RequestedCount;
     int ExecutedCount;
@@ -66,7 +68,8 @@ public bool ChaosSpawnQueue_Enqueue(
     WebSocket socket,
     const char[] eventId,
     const char[] infected,
-    int requestedCount
+    int requestedCount,
+    const char[] viewerName
 )
 {
     ChaosSpawnQueue_EnsureStarted();
@@ -77,6 +80,7 @@ public bool ChaosSpawnQueue_Enqueue(
 
     strcopy(job.EventId, sizeof(job.EventId), eventId);
     strcopy(job.Infected, sizeof(job.Infected), infected);
+    strcopy(job.ViewerName,sizeof(job.ViewerName),viewerName);
 
     job.RequestedCount = requestedCount > 0 ? requestedCount : 1;
     job.ExecutedCount = 0;
@@ -273,12 +277,19 @@ public Action ChaosSpawnQueue_ProcessTimer(
 
         if (ChaosSpawnQueue_IsEntityConfirmed(entity))
         {
+            ChaosViewerLabel_Assign(
+                entity,
+                job.ViewerName,
+                job.Infected
+            );
+
             job.ExecutedCount++;
 
             PrintToServer(
-                "[ChaosForge] Confirmed %s entity %d for event %s (%d/%d).",
+                "[ChaosForge] Confirmed %s entity %d for viewer %s in event %s (%d/%d).",
                 job.Infected,
                 entity,
+                job.ViewerName,
                 job.EventId,
                 job.ExecutedCount,
                 job.RequestedCount
